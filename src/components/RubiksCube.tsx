@@ -82,8 +82,8 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const vibrateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const VIBRATION_DURATION = 1000; // 1s
-  const SOLVED_WAIT = 1000; // 1s
+  const VIBRATION_DURATION = 1500;
+  const SOLVED_WAIT = 750;
 
   const invertMove = useCallback((move: string) => {
     if (move.includes("'")) return move.replace("'", "");
