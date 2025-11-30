@@ -5,7 +5,7 @@ import RubiksCube from '@/components/RubiksCube';
 import { ExperienceCard } from '@/components/ExperienceCard';
 import { experiences } from '@/data/experiences';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Briefcase, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Linkedin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCubeSolver } from '@/hooks/useCubeSolver';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -66,11 +66,15 @@ export default function Portfolio() {
             </p>
           </div>
           <div className="hidden md:flex gap-4">
-            <Button variant="outline" size="sm" className="gap-2" data-testid="button-resume">
-              <Briefcase className="w-4 h-4" /> Resume
+            <Button variant="outline" size="sm" className="gap-2" asChild data-testid="button-resume">
+              <a href="/resume.pdf" target="_blank" rel="noopener noreferrer">
+                <Briefcase className="w-4 h-4" /> Resume
+              </a>
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-external">
-              <ExternalLink className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="gap-2" asChild data-testid="button-linkedin">
+              <a href="https://www.linkedin.com/in/murali-krishtna/" target="_blank" rel="noopener noreferrer">
+                <Linkedin className="w-4 h-4" /> LinkedIn
+              </a>
             </Button>
           </div>
         </header>
