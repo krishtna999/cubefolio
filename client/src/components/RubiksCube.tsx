@@ -201,7 +201,7 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
     if (solutionMoves.length === 0) return { moves: [], duration: 0.3 };
 
     const numTransitions = experiences.length - 1;
-    const movesPerTransition = Math.ceil(solutionMoves.length / numTransitions);
+    const FINAL_TRANSITION_MOVES = 2;
 
     // Reset case: last step -> first step
     if (fromStep === experiences.length - 1 && toStep === 0) {
@@ -209,20 +209,50 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       return { moves: reverseMoves, duration: 0.02 }; // Very fast for reset
     }
 
+    // Determine move distribution
+    let movesPerTransition = 0;
+    let isStandardDistribution = true;
+
+    if (solutionMoves.length > FINAL_TRANSITION_MOVES && numTransitions > 1) {
+      const movesForStandardTransitions = solutionMoves.length - FINAL_TRANSITION_MOVES;
+      const standardTransitionsCount = numTransitions - 1;
+      movesPerTransition = Math.ceil(movesForStandardTransitions / standardTransitionsCount);
+      isStandardDistribution = false;
+    } else {
+      // Fallback for short solutions or single transition
+      movesPerTransition = Math.ceil(solutionMoves.length / numTransitions);
+    }
+
     // Forward case
     if (toStep > fromStep) {
+      // Check if this is the final transition (to WIP) and we are using custom split
+      if (!isStandardDistribution && toStep === experiences.length - 1 && fromStep === experiences.length - 2) {
+        return { moves: solutionMoves.slice(solutionMoves.length - FINAL_TRANSITION_MOVES), duration: 0.25 };
+      }
+
       const chunkIndex = toStep - 1;
       const startIdx = chunkIndex * movesPerTransition;
-      const endIdx = Math.min(startIdx + movesPerTransition, solutionMoves.length);
+      // If custom split, cap at the start of final moves. Else cap at total length.
+      const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
+      const endIdx = Math.min(startIdx + movesPerTransition, limitIdx);
+
       return { moves: solutionMoves.slice(startIdx, endIdx), duration: 0.25 };
     }
 
     // Backward case
     if (toStep < fromStep) {
+      // Check if this is the final transition (from WIP) and we are using custom split
+      if (!isStandardDistribution && fromStep === experiences.length - 1 && toStep === experiences.length - 2) {
+        const movesToPlay = solutionMoves.slice(solutionMoves.length - FINAL_TRANSITION_MOVES);
+        const reverseMoves = [...movesToPlay].reverse().map(invertMove);
+        return { moves: reverseMoves, duration: 0.25 };
+      }
+
       const chunkIndex = fromStep - 1;
       if (chunkIndex >= 0) {
         const startIdx = chunkIndex * movesPerTransition;
-        const endIdx = Math.min(startIdx + movesPerTransition, solutionMoves.length);
+        const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
+        const endIdx = Math.min(startIdx + movesPerTransition, limitIdx);
         const movesToPlay = solutionMoves.slice(startIdx, endIdx);
         const reverseMoves = [...movesToPlay].reverse().map(invertMove);
         return { moves: reverseMoves, duration: 0.25 };
@@ -309,7 +339,10 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
     // If we tried to use pre-computed moves from a shuffled state, the cube would not solve correctly.
     // By calculating the solution on-the-fly, we ensure the cube always resolves to the solved state
     // before starting the vibration/shuffling sequence, regardless of how much it was shuffled previously.
-    if (targetStep === experiences.length - 1) {
+
+    // UPDATE: We only force dynamic solve if we are NOT coming from the immediate previous step (linear progression).
+    // If we are moving linearly (e.g. 3 -> 4), we want to use the pre-computed 4 moves for a consistent visual effect.
+    if (targetStep === experiences.length - 1 && lastQueued !== targetStep - 1) {
       // Clear any pending transitions as we are forcing a solve from CURRENT state
       animationQueue.current = [];
 
