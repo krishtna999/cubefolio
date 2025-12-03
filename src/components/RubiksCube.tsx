@@ -97,18 +97,19 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   const lastQueuedStep = useRef(0);
 
   // Special Animation States
-  const [animationState, setAnimationState] = useState<'idle' | 'waiting' | 'vibrating' | 'shuffling' | 'chase'>('idle');
+  const [animationState, setAnimationState] = useState<'idle' | 'waiting' | 'vibrating' | 'shuffling' | 'jump'>('idle');
   const [isSolving, setIsSolving] = useState(false);
 
   const vibrationStartTime = useRef(0);
-  const chaseStartTime = useRef(0);
+  const jumpStartTime = useRef(0);
+  const isJumpingRef = useRef(false); // Ref to track jump state across effects
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const vibrateTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const chaseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const jumpTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const VIBRATION_DURATION = 1500;
   const SOLVED_WAIT = 750;
-  const CHASE_DURATION = 1000;
+  const JUMP_DURATION = 600; // ms
 
   const invertMove = useCallback((move: string) => {
     if (move.includes("'")) return move.replace("'", "");
@@ -435,18 +436,23 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       // Clear queue
       animationQueue.current = [];
 
-      // Trigger Chase Animation
-      setAnimationState('chase');
-      chaseStartTime.current = performance.now();
+      // Trigger Jump Animation
+      setAnimationState('jump');
+      isJumpingRef.current = true; // Mark as jumping
+      jumpStartTime.current = performance.now();
 
-      // Schedule the actual reset after animation
-      if (chaseTimerRef.current) clearTimeout(chaseTimerRef.current);
-      chaseTimerRef.current = setTimeout(async () => {
+      // Schedule the actual reset at the end of the jump
+      if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = setTimeout(async () => {
         await resetToStep(targetStep);
         setAnimationState('idle');
+        isJumpingRef.current = false; // Reset jump flag
+        if (groupRef.current) {
+          groupRef.current.position.y = 0; // Ensure it lands exactly on 0
+        }
         lastQueuedStep.current = targetStep;
         currentAnimatedStep.current = targetStep;
-      }, CHASE_DURATION);
+      }, JUMP_DURATION);
 
       return;
     }
@@ -509,7 +515,7 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
 
     lastQueuedStep.current = targetStep;
     processQueue();
-  }, [step, solutionMoves, experiences.length, processQueue]);
+  }, [step, solutionMoves, experiences.length, processQueue, resetToStep]);
 
   // Handle Final Step Animation Sequence
   useEffect(() => {
@@ -535,11 +541,13 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
         setAnimationState('idle');
       }
     } else {
-      // Not on final step, reset everything UNLESS we are in chase mode
-      if (animationState !== 'chase') {
+      // Not on final step, reset everything UNLESS we are in jump mode
+      // Use ref to check if we are jumping, as state might be stale in this render cycle
+      if (animationState !== 'jump' && !isJumpingRef.current) {
         setAnimationState('idle');
         if (groupRef.current) {
           groupRef.current.rotation.set(0, 0, 0);
+          groupRef.current.position.y = 0;
         }
       }
     }
@@ -566,33 +574,25 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       groupRef.current.rotation.y = (Math.random() - 0.5) * intensity;
       groupRef.current.rotation.z = (Math.random() - 0.5) * intensity;
     }
-    // Chase Logic
-    else if (animationState === 'chase') {
-      // Randomly flicker face colors
-      cubieRefs.current.forEach((cubie) => {
-        if (!cubie) return;
-        const materials = (cubie.children as THREE.Mesh[]).map(c => c.material as THREE.MeshStandardMaterial);
-        // Skip the core black box (index 0)
-        for (let i = 1; i < materials.length; i++) {
-          // 10% chance to change color this frame
-          if (Math.random() < 0.1) {
-            const colors = Object.values(FACE_COLORS);
-            const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            materials[i].color.set(randomColor);
-          }
-        }
-      });
+    // Jump Logic
+    else if (animationState === 'jump') {
+      const elapsed = performance.now() - jumpStartTime.current;
+      const progress = Math.min(elapsed / JUMP_DURATION, 1);
 
-      // Also vibrate slightly
-      groupRef.current.rotation.x = (Math.random() - 0.5) * 0.1;
-      groupRef.current.rotation.y = (Math.random() - 0.5) * 0.1;
-      groupRef.current.rotation.z = (Math.random() - 0.5) * 0.1;
+      // Parabolic jump: y = 4 * height * (x - x^2)
+      // Peak at progress = 0.5
+      const jumpHeight = 0.05;
+      const y = 4 * jumpHeight * (progress - Math.pow(progress, 2));
+
+      groupRef.current.position.y = Math.max(0, y);
     }
-    // Reset rotation if not vibrating/chasing
+    // Reset rotation if not vibrating/jumping
     else if (animationState !== 'shuffling') {
       if (Math.abs(groupRef.current.rotation.x) > 0.01) groupRef.current.rotation.x *= 0.9;
       if (Math.abs(groupRef.current.rotation.y) > 0.01) groupRef.current.rotation.y *= 0.9;
       if (Math.abs(groupRef.current.rotation.z) > 0.01) groupRef.current.rotation.z *= 0.9;
+      // Ensure position is reset
+      if (Math.abs(groupRef.current.position.y) > 0.01) groupRef.current.position.y *= 0.9;
     }
 
     // Shuffling Logic
