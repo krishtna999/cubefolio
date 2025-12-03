@@ -5,7 +5,6 @@ export type Experience = {
   company?: string;
   customSubtitle?: string;
   period: string;
-  description: string;
   detailedDescription: string;
   keyAccomplishments: Record<string, string[]>;
   color: string;
@@ -18,8 +17,7 @@ export const experiences: Experience[] = [
     id: 'intro',
     title: 'Who Am I?',
     customSubtitle: 'A curious engineer',
-    period: 'Select Direction →',
-    description: "A visual journey through my engineering career. Unscramble the cube to reveal my work.",
+    period: 'Unscramble the cube to reveal my work',
     detailedDescription: "Great engineering was never about just getting the job done. It's about understanding the whys, whens, whats, hows and whos. I focus on asking the right questions first.",
     keyAccomplishments: {
       "Highlights": [
@@ -38,7 +36,6 @@ export const experiences: Experience[] = [
     role: 'Software Development Engineer I',
     company: 'Amazon',
     period: '2020 - 2022',
-    description: "",
     detailedDescription: "At Amazon, I started my journey by tackling infrastructure-level challenges. I designed the core Pickup Locations retrieval system that forms the backbone of Amazon's pickup services globally. This API had to handle massive scale (200+ requests per second) while maintaining strict latency constraints (<150ms). I also led the initiative to centralize fragmented partner configurations across multiple teams, which involved navigating complex organizational dynamics and technical constraints.",
     keyAccomplishments: {
       "Highlights": [
@@ -58,7 +55,6 @@ export const experiences: Experience[] = [
     role: 'Software Development Engineer II',
     company: 'Amazon',
     period: '2022 - 2024',
-    description: "",
     detailedDescription: "Promoted to SDE II, I took ownership of high-visibility projects that directly impacted Amazon's customer experience and revenue. The Collection Tab was a complex initiative involving frontend, backend, and event-driven systems. It required careful coordination with Principal Engineers and multiple product teams. I also owned the DHL validation project, which was a critical fix for Amazon Germany—working with external partners and aligning their requirements with Amazon's infrastructure.",
     keyAccomplishments: {
       "Highlights": [
@@ -78,7 +74,6 @@ export const experiences: Experience[] = [
     role: 'Full Stack Engineer',
     company: 'Pavepal.ai',
     period: 'Apr 2025 - Aug 2025',
-    description: "",
     detailedDescription: "At Pavepal, I worked as a full-stack engineer—wearing all hats from DevOps to frontend development. What started as an HTML+JS POC hosted became a production-ready SaaS platform serving live clients across the globe. ",
     keyAccomplishments: {
       "Highlights": [
@@ -98,7 +93,6 @@ export const experiences: Experience[] = [
     title: 'Work In Progress',
     customSubtitle: 'Tech is a space that never ends, a cube that is never fully solved.',
     period: '2025+',
-    description: "",
     detailedDescription: "Personally, I build tech to solve problems - for myself and for the communities around me. Professionally, I'm always looking for new opportunities and new domains to work in.",
     keyAccomplishments: {
       "What's Cooking?": [

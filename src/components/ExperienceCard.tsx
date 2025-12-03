@@ -65,7 +65,7 @@ export function ExperienceCard({
         {/* Overview */}
         <section>
           <p className="text-base text-muted-foreground leading-relaxed" data-testid={`description-${experience.id}`}>
-            {experience.detailedDescription || experience.description}
+            {experience.detailedDescription}
           </p>
         </section>
 
