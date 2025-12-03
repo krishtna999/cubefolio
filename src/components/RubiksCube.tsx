@@ -222,39 +222,54 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   }, [rotateSlice]);
 
   // Helper to get moves required to reach a specific step from solved state
-  const getMovesToReachStep = useCallback((targetStep: number) => {
+  // Pre-calculate move checkpoints for each step
+  const moveCheckpoints = useMemo(() => {
     if (solutionMoves.length === 0) return [];
 
-    const numTransitions = experiences.length - 1;
-    const FINAL_TRANSITION_MOVES = 2;
+    const totalMoves = solutionMoves.length;
+    const numExperiences = experiences.length;
+    const checkpoints = new Array(numExperiences).fill(0);
 
-    let movesPerTransition = 0;
-    let isStandardDistribution = true;
+    // Step 0: Start (0 moves)
+    checkpoints[0] = 0;
 
-    if (solutionMoves.length > FINAL_TRANSITION_MOVES && numTransitions > 1) {
-      const movesForStandardTransitions = solutionMoves.length - FINAL_TRANSITION_MOVES;
-      const standardTransitionsCount = numTransitions - 1;
-      movesPerTransition = Math.ceil(movesForStandardTransitions / standardTransitionsCount);
-      isStandardDistribution = false;
-    } else {
-      movesPerTransition = Math.ceil(solutionMoves.length / numTransitions);
+    // Step N-1: WIP (All moves)
+    checkpoints[numExperiences - 1] = totalMoves;
+
+    // Step N-2: Pre-WIP (Total - 3 moves)
+    // Ensure we don't go negative if totalMoves is very small
+    const preWipMoves = Math.max(0, totalMoves - 3);
+    if (numExperiences > 1) {
+      checkpoints[numExperiences - 2] = preWipMoves;
     }
 
-    // Calculate how many moves we should have applied by targetStep
-    let totalMovesToApply = 0;
+    // Intermediate Steps: Distribute remaining moves evenly
+    // We need to distribute 'preWipMoves' across steps 1 to N-2
+    // The range is from index 0 (0 moves) to index N-2 (preWipMoves)
+    // We need to fill indices 1 to N-3
+    const numIntermediateSteps = numExperiences - 2; // Total steps excluding Start and WIP
 
-    if (targetStep === experiences.length - 1) {
-      totalMovesToApply = solutionMoves.length;
-    } else {
-      // For intermediate steps
-      const movesApplied = targetStep * movesPerTransition;
-      // Cap it correctly based on distribution
-      const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
-      totalMovesToApply = Math.min(movesApplied, limitIdx);
+    if (numIntermediateSteps > 1) {
+      // We have steps between Start and Pre-WIP
+      // Total moves to distribute: preWipMoves
+      // Number of intervals: numIntermediateSteps
+      const movesPerInterval = preWipMoves / numIntermediateSteps;
+
+      for (let i = 1; i < numExperiences - 2; i++) {
+        checkpoints[i] = Math.round(i * movesPerInterval);
+      }
     }
 
-    return solutionMoves.slice(0, totalMovesToApply);
+    console.log('Cube Move Checkpoints:', checkpoints);
+    return checkpoints;
   }, [solutionMoves, experiences.length]);
+
+  // Helper to get moves required to reach a specific step from solved state
+  const getMovesToReachStep = useCallback((targetStep: number) => {
+    if (solutionMoves.length === 0 || targetStep >= moveCheckpoints.length) return [];
+    const movesCount = moveCheckpoints[targetStep];
+    return solutionMoves.slice(0, movesCount);
+  }, [solutionMoves, moveCheckpoints]);
 
   // Reset cube to a specific step's state
   const resetToStep = useCallback(async (targetStep: number) => {
@@ -315,67 +330,34 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   const getMovesForTransition = useCallback((fromStep: number, toStep: number): { moves: string[], duration: number } => {
     if (solutionMoves.length === 0) return { moves: [], duration: 0.3 };
 
-    const numTransitions = experiences.length - 1;
-    const FINAL_TRANSITION_MOVES = 2;
-
     // Reset case: last step -> first step
     if (fromStep === experiences.length - 1 && toStep === 0) {
       const reverseMoves = [...solutionMoves].reverse().map(invertMove);
       return { moves: reverseMoves, duration: 0.02 }; // Very fast for reset
     }
 
-    // Determine move distribution
-    let movesPerTransition = 0;
-    let isStandardDistribution = true;
-
-    if (solutionMoves.length > FINAL_TRANSITION_MOVES && numTransitions > 1) {
-      const movesForStandardTransitions = solutionMoves.length - FINAL_TRANSITION_MOVES;
-      const standardTransitionsCount = numTransitions - 1;
-      movesPerTransition = Math.ceil(movesForStandardTransitions / standardTransitionsCount);
-      isStandardDistribution = false;
-    } else {
-      // Fallback for short solutions or single transition
-      movesPerTransition = Math.ceil(solutionMoves.length / numTransitions);
-    }
+    const fromMovesCount = moveCheckpoints[fromStep] || 0;
+    const toMovesCount = moveCheckpoints[toStep] || 0;
 
     // Forward case
     if (toStep > fromStep) {
-      // Check if this is the final transition (to WIP) and we are using custom split
-      if (!isStandardDistribution && toStep === experiences.length - 1 && fromStep === experiences.length - 2) {
-        return { moves: solutionMoves.slice(solutionMoves.length - FINAL_TRANSITION_MOVES), duration: 0.25 };
+      // Check if this is the final transition (to WIP)
+      if (toStep === experiences.length - 1) {
+        // Use a slightly faster duration for the final 3 moves
+        return { moves: solutionMoves.slice(fromMovesCount, toMovesCount), duration: 0.25 };
       }
-
-      const chunkIndex = toStep - 1;
-      const startIdx = chunkIndex * movesPerTransition;
-      // If custom split, cap at the start of final moves. Else cap at total length.
-      const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
-      const endIdx = Math.min(startIdx + movesPerTransition, limitIdx);
-
-      return { moves: solutionMoves.slice(startIdx, endIdx), duration: 0.25 };
+      return { moves: solutionMoves.slice(fromMovesCount, toMovesCount), duration: 0.25 };
     }
 
     // Backward case
     if (toStep < fromStep) {
-      // Check if this is the final transition (from WIP) and we are using custom split
-      if (!isStandardDistribution && fromStep === experiences.length - 1 && toStep === experiences.length - 2) {
-        const movesToPlay = solutionMoves.slice(solutionMoves.length - FINAL_TRANSITION_MOVES);
-        const reverseMoves = [...movesToPlay].reverse().map(invertMove);
-        return { moves: reverseMoves, duration: 0.25 };
-      }
-
-      const chunkIndex = fromStep - 1;
-      if (chunkIndex >= 0) {
-        const startIdx = chunkIndex * movesPerTransition;
-        const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
-        const endIdx = Math.min(startIdx + movesPerTransition, limitIdx);
-        const movesToPlay = solutionMoves.slice(startIdx, endIdx);
-        const reverseMoves = [...movesToPlay].reverse().map(invertMove);
-        return { moves: reverseMoves, duration: 0.25 };
-      }
+      const movesToPlay = solutionMoves.slice(toMovesCount, fromMovesCount);
+      const reverseMoves = [...movesToPlay].reverse().map(invertMove);
+      return { moves: reverseMoves, duration: 0.25 };
     }
 
     return { moves: [], duration: 0.3 };
-  }, [solutionMoves, experiences.length, invertMove]);
+  }, [solutionMoves, experiences.length, invertMove, moveCheckpoints]);
 
   // Process the animation queue
   const processQueue = useCallback(async () => {
