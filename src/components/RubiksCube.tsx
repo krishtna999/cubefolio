@@ -67,6 +67,28 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   // Logical Cube State (for tracking moves)
   const logicalCube = useRef<any>(new Cube());
 
+  // Generate initial solved cube positions and colors
+  const initialPositions = useMemo(() => {
+    const pos = [];
+    const cols = [];
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        for (let z = -1; z <= 1; z++) {
+          pos.push([x, y, z]);
+          const c = Array(6).fill('#111');
+          if (x === 1) c[0] = FACE_COLORS.R;
+          if (x === -1) c[1] = FACE_COLORS.L;
+          if (y === 1) c[2] = FACE_COLORS.U;
+          if (y === -1) c[3] = FACE_COLORS.D;
+          if (z === 1) c[4] = FACE_COLORS.F;
+          if (z === -1) c[5] = FACE_COLORS.B;
+          cols.push(c);
+        }
+      }
+    }
+    return { pos, cols };
+  }, []);
+
   // Animation queue system
   const animationQueue = useRef<Array<{ from: number; to: number; moves?: string[] }>>([]);
   const isProcessingQueue = useRef(false);
@@ -75,15 +97,18 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
   const lastQueuedStep = useRef(0);
 
   // Special Animation States
-  const [animationState, setAnimationState] = useState<'idle' | 'waiting' | 'vibrating' | 'shuffling'>('idle');
+  const [animationState, setAnimationState] = useState<'idle' | 'waiting' | 'vibrating' | 'shuffling' | 'chase'>('idle');
   const [isSolving, setIsSolving] = useState(false);
 
   const vibrationStartTime = useRef(0);
+  const chaseStartTime = useRef(0);
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const vibrateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const chaseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const VIBRATION_DURATION = 1500;
   const SOLVED_WAIT = 750;
+  const CHASE_DURATION = 1000;
 
   const invertMove = useCallback((move: string) => {
     if (move.includes("'")) return move.replace("'", "");
@@ -195,6 +220,96 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       await rotateSlice(axis, sliceIndex, direction, duration);
     }
   }, [rotateSlice]);
+
+  // Helper to get moves required to reach a specific step from solved state
+  const getMovesToReachStep = useCallback((targetStep: number) => {
+    if (solutionMoves.length === 0) return [];
+
+    const numTransitions = experiences.length - 1;
+    const FINAL_TRANSITION_MOVES = 2;
+
+    let movesPerTransition = 0;
+    let isStandardDistribution = true;
+
+    if (solutionMoves.length > FINAL_TRANSITION_MOVES && numTransitions > 1) {
+      const movesForStandardTransitions = solutionMoves.length - FINAL_TRANSITION_MOVES;
+      const standardTransitionsCount = numTransitions - 1;
+      movesPerTransition = Math.ceil(movesForStandardTransitions / standardTransitionsCount);
+      isStandardDistribution = false;
+    } else {
+      movesPerTransition = Math.ceil(solutionMoves.length / numTransitions);
+    }
+
+    // Calculate how many moves we should have applied by targetStep
+    let totalMovesToApply = 0;
+
+    if (targetStep === experiences.length - 1) {
+      totalMovesToApply = solutionMoves.length;
+    } else {
+      // For intermediate steps
+      const movesApplied = targetStep * movesPerTransition;
+      // Cap it correctly based on distribution
+      const limitIdx = isStandardDistribution ? solutionMoves.length : (solutionMoves.length - FINAL_TRANSITION_MOVES);
+      totalMovesToApply = Math.min(movesApplied, limitIdx);
+    }
+
+    return solutionMoves.slice(0, totalMovesToApply);
+  }, [solutionMoves, experiences.length]);
+
+  // Reset cube to a specific step's state
+  const resetToStep = useCallback(async (targetStep: number) => {
+    if (!groupRef.current) return;
+
+    // 1. Reset logical cube to solved state
+    logicalCube.current = new Cube(); // Solved
+
+    // 2. Reset visual rotation of group
+    groupRef.current.rotation.set(0, 0, 0);
+
+    // 3. Reset colors to initial state (Fix for Chase effect)
+    cubieRefs.current.forEach((cubie, i) => {
+      if (!cubie) return;
+      const initialCols = initialPositions.cols[i];
+      // Children 1-6 are the faces
+      for (let j = 0; j < 6; j++) {
+        const faceMesh = cubie.children[j + 1] as THREE.Mesh;
+        if (faceMesh && faceMesh.material) {
+          (faceMesh.material as THREE.MeshStandardMaterial).color.set(initialCols[j]);
+        }
+      }
+    });
+
+    const movesForStep = getMovesToReachStep(targetStep);
+    const reverseSolution = [...solutionMoves].reverse().map(invertMove);
+
+    // Reset Cubies to Initial State
+    cubieRefs.current.forEach((cubie, i) => {
+      if (!cubie) return;
+      const pos = initialPositions.pos[i];
+      cubie.position.set(pos[0], pos[1], pos[2]);
+      cubie.rotation.set(0, 0, 0);
+      cubie.updateMatrixWorld();
+    });
+
+    // Apply reverse solution (Instant)
+    for (const move of reverseSolution) {
+      await applyMove(move, 0);
+    }
+
+    // Apply moves for step (Instant)
+    for (const move of movesForStep) {
+      await applyMove(move, 0);
+    }
+
+    // Sync logical cube
+    for (const move of reverseSolution) {
+      logicalCube.current.move(move);
+    }
+    for (const move of movesForStep) {
+      logicalCube.current.move(move);
+    }
+
+  }, [solutionMoves, applyMove, invertMove, getMovesToReachStep, initialPositions]);
 
   // Get moves for a specific transition
   const getMovesForTransition = useCallback((fromStep: number, toStep: number): { moves: string[], duration: number } => {
@@ -333,6 +448,27 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
 
     if (targetStep === lastQueued) return;
 
+    // SPECIAL CASE: Backward from WIP (Last Step) -> Previous Step
+    if (lastQueued === experiences.length - 1 && targetStep === experiences.length - 2) {
+      // Clear queue
+      animationQueue.current = [];
+
+      // Trigger Chase Animation
+      setAnimationState('chase');
+      chaseStartTime.current = performance.now();
+
+      // Schedule the actual reset after animation
+      if (chaseTimerRef.current) clearTimeout(chaseTimerRef.current);
+      chaseTimerRef.current = setTimeout(async () => {
+        await resetToStep(targetStep);
+        setAnimationState('idle');
+        lastQueuedStep.current = targetStep;
+        currentAnimatedStep.current = targetStep;
+      }, CHASE_DURATION);
+
+      return;
+    }
+
     // DECISION: Dynamic Solving for Final Step
     // When entering the final step (WIP/Building), we force a dynamic solve from the current state.
     // This is because the final step introduces random shuffling, which puts the cube in an unpredictable state.
@@ -417,10 +553,12 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
         setAnimationState('idle');
       }
     } else {
-      // Not on final step, reset everything
-      setAnimationState('idle');
-      if (groupRef.current) {
-        groupRef.current.rotation.set(0, 0, 0);
+      // Not on final step, reset everything UNLESS we are in chase mode
+      if (animationState !== 'chase') {
+        setAnimationState('idle');
+        if (groupRef.current) {
+          groupRef.current.rotation.set(0, 0, 0);
+        }
       }
     }
 
@@ -446,7 +584,29 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       groupRef.current.rotation.y = (Math.random() - 0.5) * intensity;
       groupRef.current.rotation.z = (Math.random() - 0.5) * intensity;
     }
-    // Reset rotation if not vibrating
+    // Chase Logic
+    else if (animationState === 'chase') {
+      // Randomly flicker face colors
+      cubieRefs.current.forEach((cubie) => {
+        if (!cubie) return;
+        const materials = (cubie.children as THREE.Mesh[]).map(c => c.material as THREE.MeshStandardMaterial);
+        // Skip the core black box (index 0)
+        for (let i = 1; i < materials.length; i++) {
+          // 10% chance to change color this frame
+          if (Math.random() < 0.1) {
+            const colors = Object.values(FACE_COLORS);
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            materials[i].color.set(randomColor);
+          }
+        }
+      });
+
+      // Also vibrate slightly
+      groupRef.current.rotation.x = (Math.random() - 0.5) * 0.1;
+      groupRef.current.rotation.y = (Math.random() - 0.5) * 0.1;
+      groupRef.current.rotation.z = (Math.random() - 0.5) * 0.1;
+    }
+    // Reset rotation if not vibrating/chasing
     else if (animationState !== 'shuffling') {
       if (Math.abs(groupRef.current.rotation.x) > 0.01) groupRef.current.rotation.x *= 0.9;
       if (Math.abs(groupRef.current.rotation.y) > 0.01) groupRef.current.rotation.y *= 0.9;
@@ -471,28 +631,6 @@ export default function RubiksCube({ step, experiences, solutionMoves }: RubiksC
       });
     }
   });
-
-  // Generate initial solved cube positions and colors
-  const initialPositions = useMemo(() => {
-    const pos = [];
-    const cols = [];
-    for (let x = -1; x <= 1; x++) {
-      for (let y = -1; y <= 1; y++) {
-        for (let z = -1; z <= 1; z++) {
-          pos.push([x, y, z]);
-          const c = Array(6).fill('#111');
-          if (x === 1) c[0] = FACE_COLORS.R;
-          if (x === -1) c[1] = FACE_COLORS.L;
-          if (y === 1) c[2] = FACE_COLORS.U;
-          if (y === -1) c[3] = FACE_COLORS.D;
-          if (z === 1) c[4] = FACE_COLORS.F;
-          if (z === -1) c[5] = FACE_COLORS.B;
-          cols.push(c);
-        }
-      }
-    }
-    return { pos, cols };
-  }, []);
 
   return (
     <group ref={groupRef} scale={0.55}>
