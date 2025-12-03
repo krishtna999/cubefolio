@@ -92,7 +92,7 @@ export const experiences: Experience[] = [
     id: 'wip',
     title: 'Work In Progress',
     customSubtitle: 'Tech is a space that never ends, a cube that is never fully solved.',
-    period: '2025+',
+    period: `${new Date().getFullYear()}+`,
     detailedDescription: "Personally, I build tech to solve problems - for myself and for the communities around me. Professionally, I'm always looking for new opportunities and new domains to work in.",
     keyAccomplishments: {
       "What's Cooking?": [
