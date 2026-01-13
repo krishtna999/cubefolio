@@ -76,7 +76,7 @@ export const experiences: Experience[] = [
     role: 'Full Stack Engineer',
     company: 'Pavepal.ai',
     period: 'Apr 2025 - Aug 2025',
-    detailedDescription: "A 0-to-1 build. Wore all hats from DevOps to frontend development. Drove key design decisions with senior sign-off. What started as an HTML+JS POC hosted on S3 became a production-ready SaaS platform serving live clients across the globe.",
+    detailedDescription: "A 0 to 1 build. Wore all hats from DevOps to frontend development. Drove key design decisions with senior sign-off. What started as an HTML+JS POC hosted on S3 became a production-ready SaaS platform serving live clients across the globe.",
     keyAccomplishments: {
       "Highlights": [
         "Owned full tech stack selection (Next.js, CDN, Cognito-OAuth, Compute, DB, etc.) based on requirements.",
@@ -87,14 +87,14 @@ export const experiences: Experience[] = [
     },
     color: '#00C853',
     solved: true,
-    tech: ['Next.js', 'Agile (actually used as intended)', 'MongoDB', 'Auth flows and Frameworks (OAuth)', 'Good bunch of AWS services']
+    tech: ['Next.js', 'Agile (actually used as intended)', 'MongoDB', 'Auth flows and Frameworks (OAuth)', 'Additional AWS services']
   },
   {
     id: 'wip',
     title: 'Work In Progress',
-    customSubtitle: 'Tech is a space that never ends, a cube that is never fully solved.',
+    customSubtitle: 'Tech is a space that never ends. The cube is never fully solved.',
     period: `${new Date().getFullYear()}+`,
-    detailedDescription: "Personally, I build tech to solve problems - for myself and for the communities around me. Professionally, I'm always looking for new opportunities and new domains to work in.",
+    detailedDescription: "Personally, I build tech to solve problems for myself and the communities around me. Professionally, I'm always open to consider new opportunities and new domains to work in.",
     keyAccomplishments: {
       "What's Cooking?": [
         "An Introspective Journaling App that uses AI and some clever data analysis to provide insights and better self-reflection.",
